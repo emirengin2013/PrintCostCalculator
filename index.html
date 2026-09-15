@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Print Cost Calculator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root{
+    --paper:#f6f3ec;
+    --ink:#1c1c1a;
+    --ink-soft:#4a4944;
+    --line:#d8d3c6;
+    --accent:#2f5233;
+    --accent-soft:#e4ead9;
+    --error:#a13d2b;
+    --cyan:#0098d8;
+    --magenta:#d40078;
+    --yellow:#e0a800;
+    --black:#222;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Iowan Old Style","Georgia",serif;
+    display:flex;
+    justify-content:center;
+    padding:40px 20px;
+  }
+  .sheet{
+    width:100%;
+    max-width:600px;
+  }
+  h1{
+    font-size:26px;
+    font-weight:600;
+    margin:0 0 6px;
+  }
+  .sub{
+    color:var(--ink-soft);
+    font-size:14px;
+    margin:0 0 24px;
+    line-height:1.5;
+  }
+  .card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:22px 24px;
+    margin-bottom:16px;
+  }
+  .card h2{
+    font-size:13.5px;
+    font-weight:600;
+    margin:0 0 14px;
+    color:var(--ink);
+    border-bottom:1px solid var(--line);
+    padding-bottom:10px;
+  }
+  .drop{
+    border:1.5px dashed var(--line);
+    border-radius:4px;
+    padding:22px 16px;
+    text-align:center;
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  .drop:hover, .drop.dragover{
+    border-color:var(--accent);
+    background:var(--accent-soft);
+  }
+  .drop p{margin:0; font-size:14px; color:var(--ink-soft);}
+  .drop .fname{
+    font-family:-apple-system,sans-serif;
+    font-size:13.5px;
+    color:var(--accent);
+    font-weight:600;
+    margin-top:6px;
+    word-break:break-all;
+  }
+  input[type=file]{display:none;}
+  .row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    margin-top:12px;
+  }
+  .row.prices{
+    border-bottom:1px dashed #eee;
+    padding-bottom:12px;
+    margin-bottom:12px;
+  }
+  label{
+    font-size:13.5px;
+    color:var(--ink);
+  }
+  .field{
+    display:flex;
+    align-items:center;
+    border:1px solid var(--line);
+    border-radius:3px;
+    overflow:hidden;
+    background:#fff;
+  }
+  .field select, .field input{
+    border:none;
+    padding:8px 10px;
+    font-size:13.5px;
+    font-family:-apple-system,sans-serif;
+    outline:none;
+  }
+  .field select{cursor:pointer; min-width:120px;}
+  .field input{width:80px; text-align:right;}
+  .field span{
+    padding:0 8px;
+    font-size:12px;
+    color:var(--ink-soft);
+    background:#faf8f3;
+    align-self:stretch;
+    display:flex;
+    align-items:center;
+    border-left:1px solid var(--line);
+  }
+  .cmyk-grid{
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    gap:8px;
+    margin-top:14px;
+    padding:12px;
+    background:#faf8f3;
+    border-radius:4px;
+    border:1px solid var(--line);
+  }
+  .cmyk-item{text-align:center;}
+  .cmyk-tag{
+    font-size:11px;
+    font-weight:700;
+    display:inline-block;
+    padding:2px 6px;
+    border-radius:3px;
+    color:#fff;
+    margin-bottom:4px;
+  }
+  .cmyk-val{
+    font-family:-apple-system,sans-serif;
+    font-size:13px;
+    font-weight:600;
+  }
+  .progress-wrap{margin-top:12px; display:none;}
+  .progress-bar{
+    height:6px; background:#ebe7df; border-radius:3px; overflow:hidden;
+  }
+  .progress-fill{
+    height:100%; width:0%; background:var(--accent); transition:width .1s linear;
+  }
+  .note{font-size:12.5px; color:var(--ink-soft); margin-top:10px; line-height:1.5;}
+  .note.error{color:var(--error);}
+  .note.success{color:var(--accent); font-weight:500;}
+  .result{
+    background:var(--ink); color:var(--paper); border-radius:4px; padding:24px;
+  }
+  .result h2{
+    color:var(--paper); border-bottom-color:#3a3a36; font-size:13.5px;
+  }
+  .line{
+    display:flex; justify-content:space-between; font-size:14px; padding:7px 0; border-bottom:1px solid #333330;
+  }
+  .line span:first-child{color:#c9c7bd;}
+  .line span:last-child{font-family:-apple-system,sans-serif;}
+  .total{
+    display:flex; justify-content:space-between; align-items:baseline; padding-top:16px; margin-top:6px;
+  }
+  .total span:first-child{font-size:15px;}
+  .total span:last-child{
+    font-family:-apple-system,sans-serif; font-size:25px; font-weight:700; color:#fff;
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <h1>Print Cost Calculator</h1>
+  
+  <div class="card">
+    <div class="drop" id="drop">
+      <p>Drag and drop a file here or click to browse (PDF / PNG / JPG)</p>
+      <div class="fname" id="fname"></div>
+    </div>
+    <input type="file" id="fileInput" accept=".pdf,image/*">
+    
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="note" id="progressText">Analyzing file...</div>
+    </div>
+
+    <div class="cmyk-grid">
+      <div class="cmyk-item">
+        <span class="cmyk-tag" style="background:var(--cyan);">Cyan</span>
+        <div class="cmyk-val" id="valC">0.0%</div>
+      </div>
+      <div class="cmyk-item">
+        <span class="cmyk-tag" style="background:var(--magenta);">Magenta</span>
+        <div class="cmyk-val" id="valM">0.0%</div>
+      </div>
+      <div class="cmyk-item">
+        <span class="cmyk-tag" style="background:var(--yellow); color:#222;">Yellow</span>
+        <div class="cmyk-val" id="valY">0.0%</div>
+      </div>
+      <div class="cmyk-item">
+        <span class="cmyk-tag" style="background:var(--black);">Black (K)</span>
+        <div class="cmyk-val" id="valK">5.0%</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <label for="paperSize">Paper Size</label>
+      <div class="field">
+        <select id="paperSize">
+          <option value="2.0">A3 (297 × 420 mm)</option>
+          <option value="1.0" selected>A4 (210 × 297 mm)</option>
+          <option value="0.5">A5 (148 × 210 mm)</option>
+          <option value="0.25">A6 (105 × 148 mm)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <label for="pages">Number of Pages</label>
+      <div class="field">
+        <input type="number" id="pages" min="1" value="1">
+        <span>pages</span>
+      </div>
+    </div>
+
+    <div class="note" id="fileNote"></div>
+  </div>
+
+  <div class="card">
+    <h2>Pricing Settings</h2>
+
+    <!-- Yeni Hacim Belirleme Alanı -->
+    <div class="row" style="margin-bottom: 4px;">
+      <label for="inkVolume" style="font-weight:600;">Bottle / Package Volume</label>
+      <div class="field">
+        <input type="number" id="inkVolume" min="1" value="">
+        <span>ml</span>
+      </div>
+    </div>
+    <div class="note" style="margin-top:0; margin-bottom:16px; font-size:11.5px;">* Enter the prices below based on this volume. (e.g. 70 for 70ml bottle, 1000 for 1 Liter)</div>
+    
+    <div class="row prices">
+      <label style="color:var(--cyan); font-weight:600;">Cyan Price</label>
+      <div class="field"><input type="number" id="priceC" min="0" value=""><span>$</span></div>
+    </div>
+    <div class="row prices">
+      <label style="color:var(--magenta); font-weight:600;">Magenta Price</label>
+      <div class="field"><input type="number" id="priceM" min="0" value=""><span>$</span></div>
+    </div>
+    <div class="row prices">
+      <label style="color:var(--yellow); font-weight:600;">Yellow Price</label>
+      <div class="field"><input type="number" id="priceY" min="0" value=""><span>$</span></div>
+    </div>
+    <div class="row prices" style="border:none; margin-bottom:0;">
+      <label style="color:var(--black); font-weight:600;">Black (K) Price</label>
+      <div class="field"><input type="number" id="priceK" min="0" value=""><span>$</span></div>
+    </div>
+
+    <div class="row" style="margin-top:20px; border-top:1px solid var(--line); padding-top:16px;">
+      <label for="paperCost">Paper Cost (per page)</label>
+      <div class="field">
+        <input type="number" id="paperCost" min="0" step="0.01" value="">
+        <span>$</span>
+      </div>
+    </div>
+    <div class="row" style="display: none;">
+      <label for="fullPageA4Ml" title="Average ink consumption for 100% full coverage printing on A4 size">
+        100% A4 Consumption (Standard)
+      </label>
+      <div class="field">
+        <input type="number" id="fullPageA4Ml" min="0.1" step="0.05" value="0.5">
+        <span>ml</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card result">
+    <h2>Cost Summary</h2>
+    <div class="line"><span>Total Measured Ink</span><span id="outMl">0.00 ml</span></div>
+    <div class="line"><span>Total Paper Cost</span><span id="outPaper">$0.00</span></div>
+    <div class="line"><span>Total Ink Cost (C+M+Y+K)</span><span id="outInk">$0.00</span></div>
+    <div class="total"><span>Grand Total Cost</span><span id="outTotal">$0.00</span></div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// Global Variables
+let currentC = 0.0, currentM = 0.0, currentY = 0.0, currentK = 0.0;
+
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const fname = document.getElementById('fname');
+const paperSizeSelect = document.getElementById('paperSize');
+const pagesInput = document.getElementById('pages');
+const inkVolumeInput = document.getElementById('inkVolume');
+const paperCostInput = document.getElementById('paperCost');
+const fullPageA4MlInput = document.getElementById('fullPageA4Ml');
+const fileNote = document.getElementById('fileNote');
+const progressWrap = document.getElementById('progressWrap');
+const progressFill = document.getElementById('progressFill');
+const progressText = document.getElementById('progressText');
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+drop.addEventListener('drop', e => {
+  e.preventDefault();
+  drop.classList.remove('dragover');
+  if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files.length) processFile(e.target.files[0]);
+});
+
+function analyzeCMYK(ctx, width, height) {
+  const imgData = ctx.getImageData(0, 0, width, height).data;
+  const totalPixels = width * height;
+  let sumC = 0, sumM = 0, sumY = 0, sumK = 0;
+
+  for (let i = 0; i < imgData.length; i += 4) {
+    const r = imgData[i] / 255;
+    const g = imgData[i + 1] / 255;
+    const b = imgData[i + 2] / 255;
+    const a = imgData[i + 3] / 255;
+
+    const k = 1 - Math.max(r, g, b);
+    let c = 0, m = 0, y = 0;
+    if (k < 1) {
+      c = (1 - r - k) / (1 - k);
+      m = (1 - g - k) / (1 - k);
+      y = (1 - b - k) / (1 - k);
+    }
+
+    sumC += c * a;
+    sumM += m * a;
+    sumY += y * a;
+    sumK += k * a;
+  }
+
+  return {
+    c: (sumC / totalPixels) * 100,
+    m: (sumM / totalPixels) * 100,
+    y: (sumY / totalPixels) * 100,
+    k: (sumK / totalPixels) * 100
+  };
+}
+
+function detectPdfPaperSize(widthPt, heightPt) {
+  const w = Math.min(widthPt, heightPt);
+  if (w > 700) return "2.0";       
+  if (w >= 500 && w <= 700) return "1.0"; 
+  if (w >= 350 && w < 500) return "0.5";  
+  if (w < 350) return "0.25";             
+  return "1.0";
+}
+
+async function processFile(file) {
+  fname.textContent = file.name;
+  fileNote.className = 'note';
+  progressWrap.style.display = 'block';
+  progressFill.style.width = '0%';
+
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const isImage = file.type.startsWith('image/');
+
+  if (isPdf) {
+    try {
+      progressText.textContent = 'Opening PDF...';
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      const numPages = pdf.numPages;
+      pagesInput.value = numPages;
+
+      let totals = { c: 0, m: 0, y: 0, k: 0 };
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+      for (let i = 1; i <= numPages; i++) {
+        progressText.textContent = `Analyzing page ${i} / ${numPages}...`;
+        progressFill.style.width = `${Math.round((i / numPages) * 100)}%`;
+
+        const page = await pdf.getPage(i);
+        if (i === 1) {
+          const rawViewport = page.getViewport({ scale: 1.0 });
+          paperSizeSelect.value = detectPdfPaperSize(rawViewport.width, rawViewport.height);
+        }
+
+        const viewport = page.getViewport({ scale: 0.75 });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+        const pageCmyk = analyzeCMYK(ctx, canvas.width, canvas.height);
+        totals.c += pageCmyk.c;
+        totals.m += pageCmyk.m;
+        totals.y += pageCmyk.y;
+        totals.k += pageCmyk.k;
+      }
+
+      currentC = totals.c / numPages;
+      currentM = totals.m / numPages;
+      currentY = totals.y / numPages;
+      currentK = totals.k / numPages;
+      
+      fileNote.textContent = 'Colors successfully measured and values locked.';
+      fileNote.className = 'note success';
+    } catch (err) {
+      fileNote.textContent = 'Error occurred during PDF analysis.';
+      fileNote.className = 'note error';
+    } finally {
+      progressWrap.style.display = 'none';
+      updateUIandCalculate();
+    }
+  } else if (isImage) {
+    try {
+      progressText.textContent = 'Scanning image...';
+      progressFill.style.width = '50%';
+      pagesInput.value = 1;
+
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      await new Promise(resolve => { img.onload = resolve; });
+
+      const canvas = document.createElement('canvas');
+      const scale = Math.min(1, 900 / img.width);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const res = analyzeCMYK(ctx, canvas.width, canvas.height);
+      currentC = res.c; currentM = res.m; currentY = res.y; currentK = res.k;
+
+      fileNote.textContent = 'Colors successfully measured and values locked.';
+      fileNote.className = 'note success';
+      progressFill.style.width = '100%';
+    } catch (err) {
+      fileNote.textContent = 'Failed to scan image.';
+      fileNote.className = 'note error';
+    } finally {
+      progressWrap.style.display = 'none';
+      updateUIandCalculate();
+    }
+  }
+}
+
+function updateUIandCalculate() {
+  document.getElementById('valC').textContent = `${currentC.toFixed(1)}%`;
+  document.getElementById('valM').textContent = `${currentM.toFixed(1)}%`;
+  document.getElementById('valY').textContent = `${currentY.toFixed(1)}%`;
+  document.getElementById('valK').textContent = `${currentK.toFixed(1)}%`;
+  calculate();
+}
+
+function calculate() {
+  const pages = Math.max(0, parseFloat(pagesInput.value) || 0);
+  const paperCost = Math.max(0, parseFloat(paperCostInput.value) || 0);
+  const fullPageA4Ml = Math.max(0, parseFloat(fullPageA4MlInput.value) || 0);
+  const areaMultiplier = parseFloat(paperSizeSelect.value) || 1.0;
+  
+  const inkVol = Math.max(1, parseFloat(inkVolumeInput.value) || 1000);
+
+  const pC = parseFloat(document.getElementById('priceC').value) || 0;
+  const pM = parseFloat(document.getElementById('priceM').value) || 0;
+  const pY = parseFloat(document.getElementById('priceY').value) || 0;
+  const pK = parseFloat(document.getElementById('priceK').value) || 0;
+
+  // Ink amount consumed at 100% printing for the selected paper
+  const maxMl = fullPageA4Ml * areaMultiplier;
+
+  // Total milliliters consumed per color
+  const mlC = (currentC / 100) * maxMl * pages;
+  const mlM = (currentM / 100) * maxMl * pages;
+  const mlY = (currentY / 100) * maxMl * pages;
+  const mlK = (currentK / 100) * maxMl * pages;
+  const totalMl = mlC + mlM + mlY + mlK;
+
+  // Cost for each color based on its price and volume entered by user
+  const costC = (mlC / inkVol) * pC;
+  const costM = (mlM / inkVol) * pM;
+  const costY = (mlY / inkVol) * pY;
+  const costK = (mlK / inkVol) * pK;
+  
+  const inkTotal = costC + costM + costY + costK;
+  const paperTotal = pages * paperCost;
+  const grandTotal = paperTotal + inkTotal;
+
+  document.getElementById('outMl').textContent = totalMl < 1 ? `${totalMl.toFixed(3)} ml` : `${totalMl.toFixed(2)} ml`;
+  document.getElementById('outPaper').textContent = '$' + paperTotal.toFixed(2);
+  document.getElementById('outInk').textContent = '$' + inkTotal.toFixed(2);
+  document.getElementById('outTotal').textContent = '$' + grandTotal.toFixed(2);
+}
+
+// Add event listeners to all inputs
+document.querySelectorAll('input, select').forEach(el => {
+  if(el.id !== 'fileInput') el.addEventListener('input', calculate);
+});
+
+// Calculate with default values on page load (Black text 5%)
+updateUIandCalculate();
+</script>
+</body>
+</html>
